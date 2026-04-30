@@ -341,8 +341,16 @@ function renderHost(data) {
     const imgSrc = ALL_QUESTIONS[cq]?.dataUrl || '';
     document.getElementById('puzzle-img').src = imgSrc;
     setPuzzleImage(imgSrc);
+    // Force redraw after short delay to ensure image is loaded
+    setTimeout(() => renderPuzzle(revealedTiles || []), 300);
   }
-  renderPuzzle(revealedTiles || []);
+  // Only render puzzle if image is loaded
+  if (puzzleImg && puzzleImg.complete && puzzleImg.naturalWidth) {
+    renderPuzzle(revealedTiles || []);
+  } else if (puzzleImg && puzzleImg.src) {
+    // Image loading — draw when ready
+    puzzleImg.onload = function() { renderPuzzle(revealedTiles || []); };
+  }
   renderLB(players);
   renderChips(answers || []);
 
