@@ -120,8 +120,7 @@ canvas#conf{position:fixed;inset:0;z-index:9999;pointer-events:none;}
     <div class="main">
       <div class="q-label" id="q-label">PREGUNTA 1 DE 39</div>
       <div class="puzzle-wrap">
-        <img id="puzzle-img" src="" alt="" style="display:none">
-        <canvas id="puzzle-canvas" width="380" height="380"></canvas>
+        <img id="puzzle-img" src="" alt="" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:21px;">
       </div>
       <div class="ans-bar">
         <div class="ans-bar-title">Respuestas en vivo</div>
@@ -213,65 +212,12 @@ let lastPhase = '';
 let pollTimer = null;
 
 
-// ── Puzzle engine (sin animación) ─────────────────────────
-var puzzleImg = new Image();
-var puzzleRevealed = [];
-var PIXEL_MAX = 40;
-var PIXEL_MIN = 2;
-
+// ── Puzzle engine simple ──────────────────────────────────
 function setPuzzleImage(src) {
-  puzzleRevealed = [];
-  puzzleImg = new Image();
-  puzzleImg.onload = function() { puzzleDraw(PIXEL_MAX); };
-  puzzleImg.src = src;
+  document.getElementById('puzzle-img').src = src;
 }
-
-function renderPuzzle(revealed) {
-  puzzleRevealed = revealed ? revealed.slice() : [];
-  var pct = puzzleRevealed.length / 9;
-  var blockSize = Math.round(PIXEL_MAX - pct * (PIXEL_MAX - PIXEL_MIN));
-  puzzleDraw(blockSize);
-}
-
-function puzzleDraw(blockSize) {
-  var canvas = document.getElementById('puzzle-canvas');
-  if (!canvas) return;
-  var ctx = canvas.getContext('2d');
-  var W = canvas.width, H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-  if (!puzzleImg || !puzzleImg.complete || !puzzleImg.naturalWidth) {
-    ctx.fillStyle = '#16162a';
-    ctx.fillRect(0, 0, W, H);
-    return;
-  }
-  var bs = Math.max(1, Math.round(blockSize));
-  if (bs <= 1) {
-    ctx.drawImage(puzzleImg, 0, 0, W, H);
-  } else {
-    var small = document.createElement('canvas');
-    small.width  = Math.max(1, Math.round(W / bs));
-    small.height = Math.max(1, Math.round(H / bs));
-    var sCtx = small.getContext('2d');
-    sCtx.imageSmoothingEnabled = false;
-    sCtx.drawImage(puzzleImg, 0, 0, small.width, small.height);
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(small, 0, 0, W, H);
-  }
-  var cW = W / 3, cH = H / 3;
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-  ctx.lineWidth = 2;
-  for (var i = 1; i < 3; i++) {
-    ctx.beginPath(); ctx.moveTo(i*cW, 0); ctx.lineTo(i*cW, H); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, i*cH); ctx.lineTo(W, i*cH); ctx.stroke();
-  }
-  for (var t = 0; t < 9; t++) {
-    if (puzzleRevealed.indexOf(t) === -1) {
-      var col = t % 3, row = Math.floor(t / 3);
-      ctx.fillStyle = 'rgba(8,8,20,0.75)';
-      ctx.fillRect(col*cW+1, row*cH+1, cW-2, cH-2);
-    }
-  }
-}
+function renderPuzzle(revealed) { /* imagen directa, sin efectos */ }
+function puzzleDraw(b) {}
 // ──────────────────────────────────────────────────────────
 
 // Generate QR codes
@@ -339,14 +285,12 @@ function renderHost(data) {
   // New question
   if (cq !== currentQ) {
     currentQ = cq;
-    const imgSrc = questions[cq]?.dataUrl || '';
-    document.getElementById('puzzle-img').src = imgSrc;
+    var imgSrc = questions[cq]?.dataUrl || '';
     setPuzzleImage(imgSrc);
     // Force redraw after short delay to ensure image is loaded
-    setTimeout(function() { renderPuzzle(revealedTiles || []); }, 300);
+
   }
-  // Always redraw puzzle
-  renderPuzzle(revealedTiles || []);
+  // image already set
   renderLB(players);
   renderChips(answers || []);
 
