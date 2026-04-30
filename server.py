@@ -11,6 +11,7 @@ state = {
     "answers": {},
     "players": {},
     "questions": [],
+    "img_data": [],
     "questionStartTime": 0,
 }
 
@@ -18,11 +19,12 @@ def load_questions():
     try:
         with open("host.html", "r", encoding="utf-8") as f:
             content = f.read()
-        matches = re.findall(r"\{ name: '([^']+)', dataUrl:", content)
-        names = [m.replace("\\'", "'") for m in matches]
-        random.shuffle(names)
-        state["questions"] = names
-        print(f"✅ {len(names)} preguntas cargadas")
+        pairs = re.findall(r"\{ name: '([^']+)', dataUrl: '(data:image/[^']+)'", content)
+        items = [{"name": p[0].replace("\\'", "'"), "dataUrl": p[1]} for p in pairs]
+        random.shuffle(items)
+        state["questions"] = [i["name"] for i in items]
+        state["img_data"] = [i["dataUrl"] for i in items]
+        print(f"✅ {len(items)} preguntas cargadas")
     except Exception as e:
         print(f"❌ Error: {e}")
 
@@ -100,6 +102,13 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/host_state":
             q = state["questions"][state["currentQ"]] if 0 <= state["currentQ"] < len(state["questions"]) else None
             self.send_json({**public_state(), "currentAnswer": q})
+        elif path == "/api/img":
+            # Send current question image dataUrl to players
+            idx = state["currentQ"]
+            if 0 <= idx < len(state["img_data"]):
+                self.send_json({"dataUrl": state["img_data"][idx]})
+            else:
+                self.send_json({"dataUrl": ""})
         else:
             self.send_response(404); self.end_headers()
 

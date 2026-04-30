@@ -43,11 +43,23 @@ body{font-family:'Nunito',sans-serif;background:var(--dark);color:var(--white);m
 .nbadge{padding:6px 15px;border-radius:50px;background:rgba(255,255,255,0.09);border:2px solid rgba(255,255,255,0.13);font-size:13px;font-weight:700;}
 .sbadge{padding:6px 15px;border-radius:50px;background:linear-gradient(135deg,var(--y),var(--or));font-size:13px;font-weight:800;color:var(--dark);}
 .qlabel{font-size:11px;font-weight:700;color:rgba(255,255,255,0.35);letter-spacing:2px;text-transform:uppercase;}
-.tile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:220px;height:220px;}
-.tile{border-radius:12px;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;transition:all 0.5s cubic-bezier(0.175,0.885,0.32,1.275);}
-.tile.open{background:rgba(78,205,196,0.15);border-color:var(--bl);font-size:0;}
-.prog{width:220px;height:5px;background:rgba(255,255,255,0.08);border-radius:50px;overflow:hidden;}
+
+/* PUZZLE — pixelation canvas */
+.puzzle-wrap{
+  position:relative;
+  width:240px;height:240px;
+  border-radius:16px;overflow:hidden;
+  box-shadow:0 16px 50px rgba(0,0,0,0.5);
+  border:3px solid rgba(255,255,255,0.1);
+}
+#puzzle-canvas{width:100%;height:100%;display:block;border-radius:13px;}
+
+.prog{width:240px;height:5px;background:rgba(255,255,255,0.08);border-radius:50px;overflow:hidden;}
 .prog-fill{height:100%;background:linear-gradient(90deg,var(--bl),var(--pu));border-radius:50px;transition:width 0.5s;}
+
+/* tiles revealed count */
+.tiles-count{font-size:12px;color:rgba(255,255,255,0.35);font-weight:700;}
+
 .albl{font-size:11px;font-weight:700;color:var(--bl);letter-spacing:2px;text-transform:uppercase;display:block;text-align:left;width:100%;}
 .ainput{width:100%;padding:16px 18px;font-family:'Nunito',sans-serif;font-size:19px;font-weight:700;border:3px solid rgba(255,255,255,0.13);border-radius:18px;background:rgba(255,255,255,0.07);color:var(--white);outline:none;text-align:center;-webkit-appearance:none;transition:border-color 0.2s;}
 .ainput:focus{border-color:var(--bl);}
@@ -111,8 +123,14 @@ canvas#conf{position:fixed;inset:0;z-index:999;pointer-events:none;}
       <div class="sbadge">⭐ <span id="g-score">0</span></div>
     </div>
     <div class="qlabel" id="g-qlabel">PREGUNTA 1 DE ?</div>
-    <div class="tile-grid" id="tile-grid"></div>
+
+    <!-- Puzzle canvas -->
+    <div class="puzzle-wrap">
+      <canvas id="puzzle-canvas" width="240" height="240"></canvas>
+    </div>
+    <div class="tiles-count" id="tiles-count">0 de 9 piezas reveladas</div>
     <div class="prog"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+
     <div id="ans-section">
       <label class="albl" style="margin-bottom:7px;">¿Quién es?</label>
       <input class="ainput" id="ans-in" type="text" placeholder="Escribe el nombre..." maxlength="50" autocomplete="off" autocorrect="off" spellcheck="false">
@@ -149,204 +167,233 @@ canvas#conf{position:fixed;inset:0;z-index:999;pointer-events:none;}
 </div>
 
 <script>
-const BASE = window.location.origin; // http://192.168.x.x:9090
-const EMOJIS = ['🌟','🎈','🎉','🎭','🎨','🎪','✨','🌈','🎊'];
-let myName = '';
-let myScore = 0;
-let answered = false;
-let lastPhase = '';
-let lastQ = -1;
-let lastResult = null;
-let pollTimer = null;
+const BASE = window.location.origin;
+let myName='',myScore=0,answered=false,lastQ=-1,lastResult=null,pollTimer=null;
 
-// ── JOIN ──────────────────────────────────────────────────
-function joinGame() {
-  const input = document.getElementById('name-in');
-  const name = input.value.trim();
-  if (!name) { input.style.borderColor='#ff5252'; input.focus(); setTimeout(()=>input.style.borderColor='',1500); return; }
-  myName = name;
-  document.getElementById('wait-name').textContent = name;
-  document.getElementById('g-name').textContent = name.length > 12 ? name.slice(0,12)+'…' : name;
-
-  fetch(BASE + '/api/join', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name})
-  }).then(r => r.json()).then(d => {
-    if (d.ok) { showS('wait'); startPolling(); }
-  }).catch(() => {
-    input.style.borderColor='#ff5252';
-    input.placeholder = 'Error de conexión, reintenta...';
-  });
+function joinGame(){
+  const input=document.getElementById('name-in');
+  const name=input.value.trim();
+  if(!name){input.style.borderColor='#ff5252';input.focus();setTimeout(()=>input.style.borderColor='',1500);return;}
+  myName=name;
+  document.getElementById('wait-name').textContent=name;
+  document.getElementById('g-name').textContent=name.length>12?name.slice(0,12)+'…':name;
+  fetch(BASE+'/api/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})
+    .then(r=>r.json()).then(d=>{if(d.ok){showS('wait');startPolling();}})
+    .catch(()=>{input.style.borderColor='#ff5252';input.placeholder='Error, reintenta...';});
 }
 
-// ── POLLING ───────────────────────────────────────────────
-function startPolling() {
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(poll, 1000);
-  poll();
+function startPolling(){
+  if(pollTimer)clearInterval(pollTimer);
+  pollTimer=setInterval(poll,1000);poll();
 }
 
-async function poll() {
-  try {
-    const r = await fetch(`${BASE}/api/state?player=${encodeURIComponent(myName)}&t=${Date.now()}`);
-    const data = await r.json();
+async function poll(){
+  try{
+    const r=await fetch(`${BASE}/api/state?player=${encodeURIComponent(myName)}&t=${Date.now()}`);
+    const data=await r.json();
     handleState(data);
-  } catch(e) { /* red caída, sigue intentando */ }
+  }catch(e){}
 }
 
-// ── STATE HANDLER ─────────────────────────────────────────
-function handleState(data) {
-  const { phase, currentQ, totalQ, revealedTiles, players, myAnswer, questionAnswer, answers } = data;
+function handleState(data){
+  const{phase,currentQ,totalQ,revealedTiles,players,myAnswer,questionAnswer}=data;
+  const me=players.find(p=>p.name===myName);
+  if(me){myScore=me.score;document.getElementById('g-score').textContent=myScore;}
 
-  // Update score
-  const me = players.find(p => p.name === myName);
-  if (me) { myScore = me.score; document.getElementById('g-score').textContent = myScore; }
-
-  // New question reset
-  if (currentQ !== lastQ) {
-    lastQ = currentQ;
-    answered = false;
-    lastResult = null;
-    resetAnswerUI();
+  if(currentQ!==lastQ){
+    lastQ=currentQ;answered=false;lastResult=null;resetAnswerUI();
   }
 
-  if (phase === 'lobby') { showS('wait'); return; }
+  if(phase==='lobby'){showS('wait');return;}
 
-  if (phase === 'question') {
+  if(phase==='question'){
     showS('game');
-    document.getElementById('g-qlabel').textContent = `PREGUNTA ${currentQ+1} DE ${totalQ}`;
-    renderTiles(revealedTiles || []);
-    document.getElementById('prog-fill').style.width = `${((revealedTiles||[]).length/9)*100}%`;
-
-    // If server says I already answered
-    if (myAnswer && !lastResult) {
-      lastResult = myAnswer;
-      showFeedback(myAnswer);
-    }
+    document.getElementById('g-qlabel').textContent=`PREGUNTA ${currentQ+1} DE ${totalQ}`;
+    renderPuzzle(revealedTiles||[]);
+    const n=(revealedTiles||[]).length;
+    document.getElementById('tiles-count').textContent=`${n} de 9 piezas reveladas`;
+    document.getElementById('prog-fill').style.width=`${(n/9)*100}%`;
+    if(myAnswer&&!lastResult){lastResult=myAnswer;showFeedback(myAnswer);}
   }
 
-  if (phase === 'reveal') {
-    renderTiles(Array.from({length:9},(_,i)=>i));
-    document.getElementById('r-answer').textContent = questionAnswer || '?';
-    const ok = lastResult?.correct || myAnswer?.correct;
-    document.getElementById('r-status').innerHTML = ok
-      ? '<span style="color:var(--gr)">✅ ¡Lo acertaste!</span>'
-      : answered || myAnswer
-        ? '<span style="color:#ff7070">❌ No fue correcto</span>'
-        : '<span style="color:rgba(255,255,255,0.35)">No respondiste a tiempo</span>';
+  if(phase==='reveal'){
+    renderPuzzle(Array.from({length:9},(_,i)=>i));
+    document.getElementById('r-answer').textContent=questionAnswer||'?';
+    const ok=lastResult?.correct||myAnswer?.correct;
+    document.getElementById('r-status').innerHTML=ok
+      ?'<span style="color:var(--gr)">✅ ¡Lo acertaste!</span>'
+      :answered||myAnswer?'<span style="color:#ff7070">❌ No fue correcto</span>'
+      :'<span style="color:rgba(255,255,255,0.35)">No respondiste</span>';
     showS('reveal');
   }
 
-  if (phase === 'finished') {
-    showFinished(players);
+  if(phase==='finished'){showFinished(players);}
+}
+
+// Fetch current image from host state to get dataUrl for puzzle
+let currentImgUrl = '';
+async function fetchCurrentImg(q){
+  try{
+    const r = await fetch(`${BASE}/api/img?q=${q}&t=${Date.now()}`);
+    if(r.ok){
+      const d=await r.json();
+      currentImgUrl=d.dataUrl||'';
+      if(currentImgUrl){
+        pImg = new Image();
+        pPixelLevel = 32;
+        pImg.onload = () => renderPuzzle(pRevealed);
+        pImg.src = currentImgUrl;
+      }
+    }
+  }catch(e){}
+}
+
+// Pixelation engine for player
+let pImg = new Image();
+let pRevealed = [];
+let pPixelLevel = 32;
+let pAnimFrame = null;
+
+function renderPuzzle(revealed){
+  pRevealed = revealed;
+  const revealedCount = revealed.length;
+  const target = Math.max(1, Math.round(32 - (revealedCount / 9) * 31));
+  animPixel(target);
+}
+
+function animPixel(target){
+  if(pAnimFrame) cancelAnimationFrame(pAnimFrame);
+  function step(){
+    if(Math.abs(pPixelLevel - target) < 0.5){ pPixelLevel=target; drawPuzzle(pPixelLevel); return; }
+    pPixelLevel += (target - pPixelLevel) * 0.15;
+    drawPuzzle(pPixelLevel);
+    pAnimFrame = requestAnimationFrame(step);
+  }
+  step();
+}
+
+function drawPuzzle(blockSize){
+  const canvas = document.getElementById('puzzle-canvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  if(!pImg.complete || !pImg.naturalWidth || !currentImgUrl){
+    ctx.fillStyle='#16162a'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='rgba(255,255,255,0.15)';
+    ctx.font=`bold ${W*0.2}px Nunito`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🎭', W/2, H/2);
+    return;
   }
 
-  lastPhase = phase;
-}
+  const bs = Math.max(1, Math.round(blockSize));
+  if(bs <= 1){
+    ctx.drawImage(pImg, 0, 0, W, H);
+  } else {
+    const off = document.createElement('canvas');
+    const oW = Math.max(1, Math.round(W/bs)), oH = Math.max(1, Math.round(H/bs));
+    off.width=oW; off.height=oH;
+    const oCtx = off.getContext('2d');
+    oCtx.imageSmoothingEnabled=false;
+    oCtx.drawImage(pImg, 0, 0, oW, oH);
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(off, 0, 0, W, H);
+  }
 
-// ── ANSWER ────────────────────────────────────────────────
-function submitAnswer() {
-  if (answered) return;
-  const text = document.getElementById('ans-in').value.trim();
-  if (!text) return;
-  answered = true;
-  document.getElementById('ans-in').disabled = true;
-  document.getElementById('ans-btn').disabled = true;
-  document.getElementById('ans-btn').textContent = '⏳ Enviado...';
+  // Grid lines
+  const cW=W/3, cH=H/3;
+  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=2;
+  for(let i=1;i<3;i++){
+    ctx.beginPath();ctx.moveTo(i*cW,0);ctx.lineTo(i*cW,H);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,i*cH);ctx.lineTo(W,i*cH);ctx.stroke();
+  }
 
-  fetch(BASE + '/api/answer', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name: myName, text})
-  }).then(r => r.json()).then(d => {
-    if (d.ok) { lastResult = d; showFeedback(d); }
-  }).catch(() => {
-    document.getElementById('ans-btn').disabled = false;
-    document.getElementById('ans-btn').textContent = '¡Enviar! ✉️';
-    answered = false;
-  });
-}
-
-function showFeedback(result) {
-  document.getElementById('ans-section').style.display = 'none';
-  const fb = document.getElementById('fb');
-  fb.style.display = 'block';
-  fb.className = `fb ${result.correct ? 'ok' : 'no'}`;
-  const okE=['🎉','🌟','✨','🔥','👏'], noE=['😅','😬','😊'];
-  document.getElementById('fb-emoji').textContent = result.correct ? okE[Math.floor(Math.random()*okE.length)] : noE[Math.floor(Math.random()*noE.length)];
-  document.getElementById('fb-title').textContent = result.correct ? '¡Correcto!' : 'No fue correcto';
-  document.getElementById('fb-sub').textContent = result.correct ? '¡Buen trabajo!' : `Era: ${result.answer||''}`;
-  document.getElementById('fb-pts').textContent = result.correct ? `+${result.pts} pts` : '';
-  if (result.correct) launchConfetti(18);
-}
-
-function resetAnswerUI() {
-  document.getElementById('ans-section').style.display = 'block';
-  document.getElementById('ans-in').value = '';
-  document.getElementById('ans-in').disabled = false;
-  document.getElementById('ans-btn').disabled = false;
-  document.getElementById('ans-btn').textContent = '¡Enviar! ✉️';
-  document.getElementById('fb').style.display = 'none';
-}
-
-// ── TILES ─────────────────────────────────────────────────
-function renderTiles(revealed) {
-  const grid = document.getElementById('tile-grid');
-  if (grid.children.length !== 9) {
-    grid.innerHTML = '';
-    for (let i = 0; i < 9; i++) {
-      const t = document.createElement('div');
-      t.className = 'tile'; t.dataset.i = i; t.textContent = EMOJIS[i];
-      grid.appendChild(t);
+  // Overlays on unrevealed tiles
+  for(let i=0;i<9;i++){
+    if(!pRevealed.includes(i)){
+      const col=i%3, row=Math.floor(i/3);
+      const x=col*cW, y=row*cH;
+      ctx.fillStyle='rgba(10,10,26,0.5)';
+      ctx.fillRect(x+1,y+1,cW-2,cH-2);
+      ctx.fillStyle='rgba(255,255,255,0.2)';
+      ctx.font=`bold ${Math.round(cW*0.45)}px Nunito`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('?', x+cW/2, y+cH/2);
     }
   }
-  grid.querySelectorAll('.tile').forEach(t => {
-    const open = revealed.includes(+t.dataset.i);
-    t.classList.toggle('open', open);
-    t.textContent = open ? '' : EMOJIS[+t.dataset.i];
-  });
 }
 
-// ── FINISHED ──────────────────────────────────────────────
-function showFinished(players) {
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-  const medals = ['🥇','🥈','🥉'];
-  const rank = players.findIndex(p => p.name === myName) + 1;
-  const me = players.find(p => p.name === myName);
-  document.getElementById('fin-title').textContent = myName;
-  document.getElementById('fin-score').textContent = me ? me.score : myScore;
-  document.getElementById('fin-rank').textContent = rank <= 3
-    ? `${medals[rank-1]} ¡Puesto ${rank} de ${players.length}!`
-    : `Puesto ${rank} de ${players.length}`;
-  document.getElementById('lb-mini').innerHTML = players.slice(0,8).map((p,i) => `
+function submitAnswer(){
+  if(answered)return;
+  const text=document.getElementById('ans-in').value.trim();
+  if(!text)return;
+  answered=true;
+  document.getElementById('ans-in').disabled=true;
+  document.getElementById('ans-btn').disabled=true;
+  document.getElementById('ans-btn').textContent='⏳ Enviado...';
+  fetch(BASE+'/api/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:myName,text})})
+    .then(r=>r.json()).then(d=>{if(d.ok){lastResult=d;showFeedback(d);}})
+    .catch(()=>{document.getElementById('ans-btn').disabled=false;document.getElementById('ans-btn').textContent='¡Enviar! ✉️';answered=false;});
+}
+
+function showFeedback(result){
+  document.getElementById('ans-section').style.display='none';
+  const fb=document.getElementById('fb');fb.style.display='block';
+  fb.className=`fb ${result.correct?'ok':'no'}`;
+  const okE=['🎉','🌟','✨','🔥','👏'],noE=['😅','😬','😊'];
+  document.getElementById('fb-emoji').textContent=result.correct?okE[Math.floor(Math.random()*okE.length)]:noE[Math.floor(Math.random()*noE.length)];
+  document.getElementById('fb-title').textContent=result.correct?'¡Correcto!':'No fue correcto';
+  document.getElementById('fb-sub').textContent=result.correct?'¡Buen trabajo!':`Era: ${result.answer||''}`;
+  document.getElementById('fb-pts').textContent=result.correct?`+${result.pts} pts`:'';
+  if(result.correct)launchConfetti(18);
+}
+
+function resetAnswerUI(){
+  document.getElementById('ans-section').style.display='block';
+  document.getElementById('ans-in').value='';
+  document.getElementById('ans-in').disabled=false;
+  document.getElementById('ans-btn').disabled=false;
+  document.getElementById('ans-btn').textContent='¡Enviar! ✉️';
+  document.getElementById('fb').style.display='none';
+  currentImgUrl='';
+  pImg = new Image();
+  pPixelLevel = 32;
+  drawPuzzle(32);
+  if(lastQ>=0) fetchCurrentImg(lastQ);
+}
+
+function showFinished(players){
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+  const medals=['🥇','🥈','🥉'];
+  const rank=players.findIndex(p=>p.name===myName)+1;
+  const me=players.find(p=>p.name===myName);
+  document.getElementById('fin-title').textContent=myName;
+  document.getElementById('fin-score').textContent=me?me.score:myScore;
+  document.getElementById('fin-rank').textContent=rank<=3?`${medals[rank-1]} ¡Puesto ${rank} de ${players.length}!`:`Puesto ${rank} de ${players.length}`;
+  document.getElementById('lb-mini').innerHTML=players.slice(0,8).map((p,i)=>`
     <div class="lbr ${p.name===myName?'me':''}">
       <span style="font-family:'Baloo 2',cursive;font-size:14px;font-weight:900;color:rgba(255,255,255,0.3)">${medals[i]||i+1}</span>
-      <span style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}${p.name===myName?' (tú)':''}</span>
+      <span style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}${p.name===myName?' (tú)':''}</span>
       <span style="font-family:'Baloo 2',cursive;font-size:16px;font-weight:900;color:var(--y)">${p.score}</span>
     </div>`).join('');
   showS('fin');
-  if (rank === 1) launchConfetti(60);
+  if(rank===1)launchConfetti(60);
 }
 
-// ── UTILS ─────────────────────────────────────────────────
-function showS(name) {
-  ['join','wait','game','reveal','fin'].forEach(s =>
-    document.getElementById(`s-${s}`).classList.toggle('on', s === name));
-}
+function showS(name){['join','wait','game','reveal','fin'].forEach(s=>document.getElementById(`s-${s}`).classList.toggle('on',s===name));}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-function launchConfetti(n) {
-  const c = document.getElementById('conf'), ctx = c.getContext('2d');
-  c.width = innerWidth; c.height = innerHeight;
-  const cols = ['#FFD93D','#FF6B9D','#4ECDC4','#C77DFF','#FF8C42','#6BCB77'];
-  const ps = Array.from({length:n*3},()=>({x:Math.random()*c.width,y:-10,s:Math.random()*8+4,col:cols[Math.floor(Math.random()*cols.length)],vx:(Math.random()-0.5)*4,vy:Math.random()*4+2,r:Math.random()*360,vr:(Math.random()-0.5)*9}));
+function launchConfetti(n){
+  const c=document.getElementById('conf'),ctx=c.getContext('2d');
+  c.width=innerWidth;c.height=innerHeight;
+  const cols=['#FFD93D','#FF6B9D','#4ECDC4','#C77DFF','#FF8C42','#6BCB77'];
+  const ps=Array.from({length:n*3},()=>({x:Math.random()*c.width,y:-10,s:Math.random()*8+4,col:cols[Math.floor(Math.random()*cols.length)],vx:(Math.random()-0.5)*4,vy:Math.random()*4+2,r:Math.random()*360,vr:(Math.random()-0.5)*9}));
   let fr;(function anim(){ctx.clearRect(0,0,c.width,c.height);let alive=false;ps.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.09;p.r+=p.vr;if(p.y<c.height+10)alive=true;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r*Math.PI/180);ctx.fillStyle=p.col;ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.55);ctx.restore();});if(alive)fr=requestAnimationFrame(anim);else ctx.clearRect(0,0,c.width,c.height);})();
 }
 
-document.getElementById('name-in').addEventListener('keydown', e => { if(e.key==='Enter') joinGame(); });
-document.getElementById('ans-in').addEventListener('keydown', e => { if(e.key==='Enter') submitAnswer(); });
+document.getElementById('name-in').addEventListener('keydown',e=>{if(e.key==='Enter')joinGame();});
+document.getElementById('ans-in').addEventListener('keydown',e=>{if(e.key==='Enter')submitAnswer();});
 </script>
 </body>
 </html>
