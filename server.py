@@ -107,6 +107,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/host_state":
             q = state["questions"][state["currentQ"]] if 0 <= state["currentQ"] < len(state["questions"]) else None
             self.send_json({**public_state(), "currentAnswer": q})
+        elif path == "/api/order":
+            # Send the shuffled question order (names only) so host can sync
+            self.send_json({"names": state["questions"]})
         elif path == "/api/img":
             # Send current question image dataUrl to players
             idx = state["currentQ"]

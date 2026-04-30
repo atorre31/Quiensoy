@@ -128,8 +128,8 @@ canvas#conf{position:fixed;inset:0;z-index:9999;pointer-events:none;}
         <div class="chips" id="ans-chips"><span style="color:rgba(255,255,255,0.25);font-size:12px;">Esperando...</span></div>
       </div>
       <div class="ctrls">
-        <button class="btn btn-g" onclick="hostCmd('/api/host/reveal_one')">🔲 Revelar pieza</button>
-        <button class="btn btn-b" onclick="hostCmd('/api/host/reveal_all')">👁 Revelar todo</button>
+        <button class="btn btn-g" onclick="hostCmd('/api/host/reveal_one').then(()=>pollHost())">🔲 Revelar pieza</button>
+        <button class="btn btn-b" onclick="hostCmd('/api/host/reveal_all').then(()=>pollHost())">👁 Revelar todo</button>
         <button class="btn btn-y" onclick="goNext()">Siguiente →</button>
       </div>
     </div>
@@ -149,7 +149,7 @@ canvas#conf{position:fixed;inset:0;z-index:9999;pointer-events:none;}
   <div class="rev-name" id="rev-name">?</div>
   <img class="rev-img" id="rev-img" src="" alt="">
   <div class="rev-who" id="rev-who"></div>
-  <button class="btn btn-y" onclick="hideReveal();hostCmd('/api/host/next').then(()=>pollHost());" style="font-size:17px;padding:14px 40px;margin-top:6px;">Siguiente →</button>
+  <button class="btn btn-y" onclick="hostNext();" style="font-size:17px;padding:14px 40px;margin-top:6px;">Siguiente →</button>
 </div>
 
 <div class="screen" id="s-finished">
@@ -206,6 +206,8 @@ const BASE = window.location.origin;
 const PLAYER_URL = window.location.origin + '/player.html';
 const EMOJIS = ['🌟','🎈','🎉','🎭','🎨','🎪','✨','🌈','🎊'];
 
+let questions = []; // Will be synced with server order
+let ALL_QUESTIONS_MAP = {};
 let currentQ = -1;
 let lastPhase = '';
 let pollTimer = null;
@@ -300,7 +302,31 @@ window.onload = () => {
   const sideUrl = document.getElementById('sidebar-url-text');
   if(lobbyUrl) lobbyUrl.textContent = PLAYER_URL;
   if(sideUrl) sideUrl.textContent = PLAYER_URL;
-  startPolling();
+
+  // Build a lookup map by name for fast reordering
+  ALL_QUESTIONS_MAP = {};
+  ALL_QUESTIONS.forEach(q => {
+    if (!ALL_QUESTIONS_MAP[q.name]) ALL_QUESTIONS_MAP[q.name] = [];
+    ALL_QUESTIONS_MAP[q.name].push(q);
+  });
+
+  // Fetch server's question order and sync
+  fetch(BASE + '/api/order').then(r => r.json()).then(d => {
+    const usedCount = {};
+    questions = d.names.map(name => {
+      usedCount[name] = (usedCount[name] || 0);
+      const arr = ALL_QUESTIONS_MAP[name] || [];
+      const q = arr[usedCount[name] % arr.length] || ALL_QUESTIONS.find(q => q.name === name) || {name, dataUrl:''};
+      usedCount[name]++;
+      return q;
+    });
+    console.log('✅ Order synced:', questions.length, 'questions');
+    startPolling();
+  }).catch(() => {
+    // Fallback: use original order
+    questions = [...ALL_QUESTIONS];
+    startPolling();
+  });
 };
 
 // ── API calls ──
@@ -342,7 +368,7 @@ function renderHost(data) {
   // New question
   if (cq !== currentQ) {
     currentQ = cq;
-    const imgSrc = ALL_QUESTIONS[cq]?.dataUrl || '';
+    const imgSrc = questions[cq]?.dataUrl || '';
     document.getElementById('puzzle-img').src = imgSrc;
     setPuzzleImage(imgSrc);
     // Force redraw after short delay to ensure image is loaded
@@ -403,7 +429,7 @@ function renderLB(players) {
 
 function showReveal(answer, answers, players) {
   if (document.getElementById('rev-overlay').classList.contains('on')) return;
-  const q = ALL_QUESTIONS[currentQ];
+  const q = questions[currentQ];
   document.getElementById('rev-name').textContent = answer || '?';
   document.getElementById('rev-img').src = q?.dataUrl || '';
 
@@ -428,6 +454,11 @@ function hideReveal() { document.getElementById('rev-overlay').classList.remove(
 function goNext() {
   hideReveal();
   hostCmd('/api/host/show_reveal').then(() => pollHost());
+}
+
+function hostNext() {
+  hideReveal();
+  hostCmd('/api/host/next').then(() => { pollHost(); });
 }
 
 function renderFinished(players) {
