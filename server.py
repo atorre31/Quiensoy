@@ -65,6 +65,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", len(body))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Security-Policy", "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;")
         self.end_headers()
         self.wfile.write(body)
 
@@ -76,6 +77,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", len(body))
             self.send_header("Cache-Control", "no-cache")
+            self.send_header("Content-Security-Policy", "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;")
             self.end_headers()
             self.wfile.write(body)
         except FileNotFoundError:
