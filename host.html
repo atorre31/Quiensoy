@@ -210,6 +210,84 @@ let currentQ = -1;
 let lastPhase = '';
 let pollTimer = null;
 
+
+// ── Puzzle pixelation engine ──────────────────────────────
+var puzzleImg = new Image();
+var puzzleRevealed = [];
+var pixelAnimFrame = null;
+var pixelCurrent = 40;
+var PIXEL_MAX = 40;
+var PIXEL_MIN = 2;
+
+function setPuzzleImage(src) {
+  if (pixelAnimFrame) { cancelAnimationFrame(pixelAnimFrame); pixelAnimFrame = null; }
+  puzzleRevealed = [];
+  pixelCurrent = PIXEL_MAX;
+  puzzleImg = new Image();
+  puzzleImg.onload = function() { puzzleDraw(pixelCurrent); };
+  puzzleImg.src = src;
+}
+
+function renderPuzzle(revealed) {
+  puzzleRevealed = revealed ? revealed.slice() : [];
+  var pct = puzzleRevealed.length / 9;
+  var target = PIXEL_MAX - pct * (PIXEL_MAX - PIXEL_MIN);
+  puzzleAnimate(target);
+}
+
+function puzzleAnimate(target) {
+  if (pixelAnimFrame) { cancelAnimationFrame(pixelAnimFrame); pixelAnimFrame = null; }
+  function step() {
+    var diff = target - pixelCurrent;
+    if (Math.abs(diff) < 0.3) { pixelCurrent = target; puzzleDraw(pixelCurrent); return; }
+    pixelCurrent += diff * 0.12;
+    puzzleDraw(pixelCurrent);
+    pixelAnimFrame = requestAnimationFrame(step);
+  }
+  step();
+}
+
+function puzzleDraw(blockSize) {
+  var canvas = document.getElementById('puzzle-canvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  if (!puzzleImg || !puzzleImg.complete || !puzzleImg.naturalWidth) {
+    ctx.fillStyle = '#16162a';
+    ctx.fillRect(0, 0, W, H);
+    return;
+  }
+  var bs = Math.max(1, Math.round(blockSize));
+  if (bs <= 1) {
+    ctx.drawImage(puzzleImg, 0, 0, W, H);
+  } else {
+    var small = document.createElement('canvas');
+    small.width  = Math.max(1, Math.round(W / bs));
+    small.height = Math.max(1, Math.round(H / bs));
+    var sCtx = small.getContext('2d');
+    sCtx.imageSmoothingEnabled = false;
+    sCtx.drawImage(puzzleImg, 0, 0, small.width, small.height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(small, 0, 0, W, H);
+  }
+  var cW = W / 3, cH = H / 3;
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 2;
+  for (var i = 1; i < 3; i++) {
+    ctx.beginPath(); ctx.moveTo(i*cW, 0); ctx.lineTo(i*cW, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i*cH); ctx.lineTo(W, i*cH); ctx.stroke();
+  }
+  for (var t = 0; t < 9; t++) {
+    if (puzzleRevealed.indexOf(t) === -1) {
+      var col = t % 3, row = Math.floor(t / 3);
+      ctx.fillStyle = 'rgba(8,8,20,0.75)';
+      ctx.fillRect(col*cW+1, row*cH+1, cW-2, cH-2);
+    }
+  }
+}
+// ─────────────────────────────────────────────────────────
+
 // Generate QR codes
 window.onload = () => {
   new QRCode(document.getElementById('lobby-qr'), {text:PLAYER_URL,width:190,height:190,colorDark:'#0d0d1a',colorLight:'#FFFDF7',correctLevel:QRCode.CorrectLevel.M});
