@@ -213,40 +213,24 @@ let lastPhase = '';
 let pollTimer = null;
 
 
-// ── Puzzle pixelation engine ──────────────────────────────
+// ── Puzzle engine (sin animación) ─────────────────────────
 var puzzleImg = new Image();
 var puzzleRevealed = [];
-var pixelAnimFrame = null;
-var pixelCurrent = 40;
 var PIXEL_MAX = 40;
 var PIXEL_MIN = 2;
 
 function setPuzzleImage(src) {
-  if (pixelAnimFrame) { cancelAnimationFrame(pixelAnimFrame); pixelAnimFrame = null; }
   puzzleRevealed = [];
-  pixelCurrent = PIXEL_MAX;
   puzzleImg = new Image();
-  puzzleImg.onload = function() { puzzleDraw(pixelCurrent); };
+  puzzleImg.onload = function() { puzzleDraw(PIXEL_MAX); };
   puzzleImg.src = src;
 }
 
 function renderPuzzle(revealed) {
   puzzleRevealed = revealed ? revealed.slice() : [];
   var pct = puzzleRevealed.length / 9;
-  var target = PIXEL_MAX - pct * (PIXEL_MAX - PIXEL_MIN);
-  puzzleAnimate(target);
-}
-
-function puzzleAnimate(target) {
-  if (pixelAnimFrame) { cancelAnimationFrame(pixelAnimFrame); pixelAnimFrame = null; }
-  function step() {
-    var diff = target - pixelCurrent;
-    if (Math.abs(diff) < 0.3) { pixelCurrent = target; puzzleDraw(pixelCurrent); return; }
-    pixelCurrent += diff * 0.12;
-    puzzleDraw(pixelCurrent);
-    pixelAnimFrame = requestAnimationFrame(step);
-  }
-  step();
+  var blockSize = Math.round(PIXEL_MAX - pct * (PIXEL_MAX - PIXEL_MIN));
+  puzzleDraw(blockSize);
 }
 
 function puzzleDraw(blockSize) {
@@ -288,7 +272,7 @@ function puzzleDraw(blockSize) {
     }
   }
 }
-// ─────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────
 
 // Generate QR codes
 window.onload = () => {
@@ -359,20 +343,10 @@ function renderHost(data) {
     document.getElementById('puzzle-img').src = imgSrc;
     setPuzzleImage(imgSrc);
     // Force redraw after short delay to ensure image is loaded
-    setTimeout(() => renderPuzzle(revealedTiles || []), 300);
+    setTimeout(function() { renderPuzzle(revealedTiles || []); }, 300);
   }
-  // Always update revealed tiles and redraw
-  puzzleRevealed = revealedTiles ? revealedTiles.slice() : [];
-  if (puzzleImg && puzzleImg.complete && puzzleImg.naturalWidth) {
-    var pct = puzzleRevealed.length / 9;
-    var target = PIXEL_MAX - pct * (PIXEL_MAX - PIXEL_MIN);
-    puzzleDraw(target);
-  } else if (puzzleImg && puzzleImg.src) {
-    puzzleImg.onload = function() {
-      var pct = puzzleRevealed.length / 9;
-      puzzleDraw(PIXEL_MAX - pct * (PIXEL_MAX - PIXEL_MIN));
-    };
-  }
+  // Always redraw puzzle
+  renderPuzzle(revealedTiles || []);
   renderLB(players);
   renderChips(answers || []);
 
