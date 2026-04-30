@@ -310,23 +310,10 @@ window.onload = () => {
     ALL_QUESTIONS_MAP[q.name].push(q);
   });
 
-  // Fetch server's question order and sync
-  fetch(BASE + '/api/order').then(r => r.json()).then(d => {
-    const usedCount = {};
-    questions = d.names.map(name => {
-      usedCount[name] = (usedCount[name] || 0);
-      const arr = ALL_QUESTIONS_MAP[name] || [];
-      const q = arr[usedCount[name] % arr.length] || ALL_QUESTIONS.find(q => q.name === name) || {name, dataUrl:''};
-      usedCount[name]++;
-      return q;
-    });
-    console.log('✅ Order synced:', questions.length, 'questions');
-    startPolling();
-  }).catch(() => {
-    // Fallback: use original order
-    questions = [...ALL_QUESTIONS];
-    startPolling();
-  });
+  // Use same fixed order as server (no shuffle)
+  questions = [...ALL_QUESTIONS];
+  console.log('✅ Order synced:', questions.length, 'questions');
+  startPolling();
 };
 
 // ── API calls ──
@@ -374,12 +361,17 @@ function renderHost(data) {
     // Force redraw after short delay to ensure image is loaded
     setTimeout(() => renderPuzzle(revealedTiles || []), 300);
   }
-  // Only render puzzle if image is loaded
+  // Always update revealed tiles and redraw
+  puzzleRevealed = revealedTiles ? revealedTiles.slice() : [];
   if (puzzleImg && puzzleImg.complete && puzzleImg.naturalWidth) {
-    renderPuzzle(revealedTiles || []);
+    var pct = puzzleRevealed.length / 9;
+    var target = PIXEL_MAX - pct * (PIXEL_MAX - PIXEL_MIN);
+    puzzleDraw(target);
   } else if (puzzleImg && puzzleImg.src) {
-    // Image loading — draw when ready
-    puzzleImg.onload = function() { renderPuzzle(revealedTiles || []); };
+    puzzleImg.onload = function() {
+      var pct = puzzleRevealed.length / 9;
+      puzzleDraw(PIXEL_MAX - pct * (PIXEL_MAX - PIXEL_MIN));
+    };
   }
   renderLB(players);
   renderChips(answers || []);

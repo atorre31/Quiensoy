@@ -21,7 +21,6 @@ def load_questions():
             content = f.read()
         pairs = re.findall(r"\{ name: '([^']+)', dataUrl: '(data:image/[^']+)'", content)
         items = [{"name": p[0].replace("\\'", "'"), "dataUrl": p[1]} for p in pairs]
-        random.shuffle(items)
         state["questions"] = [i["name"] for i in items]
         state["img_data"] = [i["dataUrl"] for i in items]
         print(f"✅ {len(items)} preguntas cargadas")
