@@ -236,11 +236,11 @@ async function fetchCurrentImg(q){
   try{
     const r = await fetch(`${BASE}/api/img?q=${q}&t=${Date.now()}`);
     if(r.ok){
-      const d=await r.json();
-      currentImgUrl=d.dataUrl||'';
+      const d = await r.json();
+      currentImgUrl = d.dataUrl || '';
       if(currentImgUrl){
         pImg = new Image();
-        pPixelLevel = 32;
+        pPixelCurrent = P_MAX;
         pImg.onload = () => renderPuzzle(pRevealed);
         pImg.src = currentImgUrl;
       }
@@ -248,25 +248,23 @@ async function fetchCurrentImg(q){
   }catch(e){}
 }
 
-// Pixelation engine for player
+// ── Puzzle pixelation engine (player) ─────────────────────
 let pImg = new Image();
 let pRevealed = [];
-let pPixelLevel = 32;
+let pPixelCurrent = 40;
 let pAnimFrame = null;
+const P_MAX = 40, P_MIN = 2;
 
 function renderPuzzle(revealed){
-  pRevealed = revealed;
-  const revealedCount = revealed.length;
-  const target = Math.max(1, Math.round(32 - (revealedCount / 9) * 31));
-  animPixel(target);
-}
-
-function animPixel(target){
+  pRevealed = [...revealed];
+  const pct = revealed.length / 9;
+  const target = P_MAX - pct * (P_MAX - P_MIN);
   if(pAnimFrame) cancelAnimationFrame(pAnimFrame);
   function step(){
-    if(Math.abs(pPixelLevel - target) < 0.5){ pPixelLevel=target; drawPuzzle(pPixelLevel); return; }
-    pPixelLevel += (target - pPixelLevel) * 0.15;
-    drawPuzzle(pPixelLevel);
+    const diff = target - pPixelCurrent;
+    if(Math.abs(diff) < 0.3){ pPixelCurrent=target; drawPuzzle(pPixelCurrent); return; }
+    pPixelCurrent += diff * 0.12;
+    drawPuzzle(pPixelCurrent);
     pAnimFrame = requestAnimationFrame(step);
   }
   step();
@@ -279,11 +277,9 @@ function drawPuzzle(blockSize){
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0,0,W,H);
 
-  if(!pImg.complete || !pImg.naturalWidth || !currentImgUrl){
-    ctx.fillStyle='#16162a'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='rgba(255,255,255,0.15)';
-    ctx.font=`bold ${W*0.2}px Nunito`; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('🎭', W/2, H/2);
+  if(!pImg.complete || !pImg.naturalWidth){
+    ctx.fillStyle='#16162a';
+    ctx.fillRect(0,0,W,H);
     return;
   }
 
@@ -292,34 +288,29 @@ function drawPuzzle(blockSize){
     ctx.drawImage(pImg, 0, 0, W, H);
   } else {
     const off = document.createElement('canvas');
-    const oW = Math.max(1, Math.round(W/bs)), oH = Math.max(1, Math.round(H/bs));
-    off.width=oW; off.height=oH;
+    off.width  = Math.max(1, Math.round(W/bs));
+    off.height = Math.max(1, Math.round(H/bs));
     const oCtx = off.getContext('2d');
-    oCtx.imageSmoothingEnabled=false;
-    oCtx.drawImage(pImg, 0, 0, oW, oH);
-    ctx.imageSmoothingEnabled=false;
+    oCtx.imageSmoothingEnabled = false;
+    oCtx.drawImage(pImg, 0, 0, off.width, off.height);
+    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(off, 0, 0, W, H);
   }
 
   // Grid lines
   const cW=W/3, cH=H/3;
-  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=2;
+  ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1.5;
   for(let i=1;i<3;i++){
     ctx.beginPath();ctx.moveTo(i*cW,0);ctx.lineTo(i*cW,H);ctx.stroke();
     ctx.beginPath();ctx.moveTo(0,i*cH);ctx.lineTo(W,i*cH);ctx.stroke();
   }
 
-  // Overlays on unrevealed tiles
+  // Dark overlay on unrevealed tiles
   for(let i=0;i<9;i++){
     if(!pRevealed.includes(i)){
       const col=i%3, row=Math.floor(i/3);
-      const x=col*cW, y=row*cH;
-      ctx.fillStyle='rgba(10,10,26,0.5)';
-      ctx.fillRect(x+1,y+1,cW-2,cH-2);
-      ctx.fillStyle='rgba(255,255,255,0.2)';
-      ctx.font=`bold ${Math.round(cW*0.45)}px Nunito`;
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('?', x+cW/2, y+cH/2);
+      ctx.fillStyle='rgba(8,8,20,0.72)';
+      ctx.fillRect(col*cW+1, row*cH+1, cW-2, cH-2);
     }
   }
 }
@@ -370,8 +361,8 @@ function resetAnswerUI(){
   document.getElementById('fb').style.display='none';
   currentImgUrl='';
   pImg = new Image();
-  pPixelLevel = 32;
-  drawPuzzle(32);
+  pPixelCurrent = P_MAX;
+  drawPuzzle(P_MAX);
   if(lastQ>=0) fetchCurrentImg(lastQ);
 }
 

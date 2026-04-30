@@ -262,8 +262,7 @@ function renderHost(data) {
     currentQ = cq;
     const imgSrc = ALL_QUESTIONS[cq]?.dataUrl || '';
     document.getElementById('puzzle-img').src = imgSrc;
-    pixelLevel = 32;
-    loadPuzzleImage(imgSrc).then(() => renderPuzzle([]));
+    setPuzzleImage(imgSrc);
   }
   renderPuzzle(revealedTiles || []);
   renderLB(players);
