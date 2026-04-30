@@ -341,12 +341,24 @@ function showFeedback(result){
   document.getElementById('ans-section').style.display='none';
   const fb=document.getElementById('fb');fb.style.display='block';
   fb.className=`fb ${result.correct?'ok':'no'}`;
+  const medals=['🥇','🥈','🥉'];
   const okE=['🎉','🌟','✨','🔥','👏'],noE=['😅','😬','😊'];
-  document.getElementById('fb-emoji').textContent=result.correct?okE[Math.floor(Math.random()*okE.length)]:noE[Math.floor(Math.random()*noE.length)];
-  document.getElementById('fb-title').textContent=result.correct?'¡Correcto!':'No fue correcto';
-  document.getElementById('fb-sub').textContent=result.correct?'¡Buen trabajo!':`Era: ${result.answer||''}`;
-  document.getElementById('fb-pts').textContent=result.correct?`+${result.pts} pts`:'';
-  if(result.correct)launchConfetti(18);
+
+  if(result.correct){
+    const order = result.order;
+    const medal = order && order<=3 ? medals[order-1] : '✅';
+    const orderText = order===1?'¡Primero en acertar! 🚀':order===2?'¡Segundo lugar! ⚡':order===3?'¡Tercer lugar! 🎯':'¡Lo acertaste!';
+    document.getElementById('fb-emoji').textContent=medal;
+    document.getElementById('fb-title').textContent=orderText;
+    document.getElementById('fb-sub').textContent=`en ${result.time?result.time.toFixed(1):'?'}s`;
+    document.getElementById('fb-pts').textContent=`+${result.pts} pts`;
+    launchConfetti(order===1?35:18);
+  } else {
+    document.getElementById('fb-emoji').textContent=noE[Math.floor(Math.random()*noE.length)];
+    document.getElementById('fb-title').textContent='No fue correcto';
+    document.getElementById('fb-sub').textContent=`Era: ${result.answer||''}`;
+    document.getElementById('fb-pts').textContent='';
+  }
 }
 
 function resetAnswerUI(){

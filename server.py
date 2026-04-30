@@ -49,7 +49,10 @@ def public_state(player_name=None):
         "players": players_list,
         "myAnswer": state["answers"].get(player_name),
         "questionAnswer": state["questions"][state["currentQ"]] if state["phase"] == "reveal" and state["currentQ"] >= 0 else None,
-        "answers": [{"name": n, "correct": a["correct"]} for n, a in state["answers"].items()],
+        "answers": [
+            {"name": n, "correct": a["correct"], "time": round(a["time"], 2), "order": a.get("order"), "pts": a.get("pts", 0)}
+            for n, a in sorted(state["answers"].items(), key=lambda x: x[1]["time"])
+        ],
     }
 
 class Handler(BaseHTTPRequestHandler):
@@ -136,9 +139,11 @@ class Handler(BaseHTTPRequestHandler):
             elapsed = time.time() - state["questionStartTime"]
             bonus = max(0, int(50 * (1 - elapsed / 30))) if correct else 0
             pts = 100 + bonus if correct else 0
-            state["answers"][name] = {"correct": correct, "pts": pts, "time": elapsed}
+            # Track correct answer order
+            correct_order = len([a for a in state["answers"].values() if a["correct"]]) + 1 if correct else None
+            state["answers"][name] = {"correct": correct, "pts": pts, "time": elapsed, "order": correct_order}
             if correct: state["players"][name]["score"] += pts
-            self.send_json({"ok": True, "correct": correct, "pts": pts, "answer": q})
+            self.send_json({"ok": True, "correct": correct, "pts": pts, "answer": q, "order": correct_order})
 
         elif path == "/api/host/start":
             load_questions()
